@@ -6,6 +6,7 @@
 
 #include <limits>
 #include <cassert>
+#include <functional>
 
 typedef uint32_t ui;
 typedef uint64_t ull;
@@ -117,7 +118,7 @@ big_integer &big_integer::operator+=(big_integer const &rhs) {
     if (isNegative != rhs.isNegative) {
         isNegative = !isNegative;
         *this -= rhs;
-        isNegative = !isNegative;
+        if (!size() == 0) { isNegative = !isNegative; }
         return *this;
     }
 
@@ -176,13 +177,13 @@ big_integer &big_integer::operator-=(big_integer const &rhs) {
     if (isNegative != rhs.isNegative) {
         isNegative = !isNegative;
         *this += rhs;
-        isNegative = !isNegative;
+        if (!size() == 0) { isNegative = !isNegative; }
         return *this;
     }
 
     if ((*this < rhs) ^ isNegative) {
         *this = rhs - *this;
-        isNegative = !isNegative;
+        if (!size() == 0) { isNegative = !isNegative; }
         return *this;
     }
 
@@ -190,6 +191,7 @@ big_integer &big_integer::operator-=(big_integer const &rhs) {
         ull res = toulong() + ~rhs.toulong() + 1;
         if (uicast(res >> BITS) == 0) {
             smallnumber = uicast(res);
+            if (smallnumber == 0) { isNegative = false; }
         } else {
             to_big(res);
         }
@@ -256,6 +258,8 @@ big_integer &big_integer::operator*=(big_integer const &rhs) {
         }
         remove_leading_zeros();
     }
+    isNegative ^= rhs.isNegative;
+    if (size() == 0) { isNegative = false; }
     return *this;
 }
 
@@ -287,7 +291,7 @@ void add_with_shift(storage_t &lhs, const storage_t& rhs, long sh) {
     ull carry = 0;
     size_t m = rhs.size() + sh;
     size_t n = lhs.size() + 1;
-    lhs.push_back(UI_MAX);
+    lhs.push_back(0);
 
     for (size_t i = sh; i < m; i++) {
         ull tmp = carry + lhs[i] + rhs[i - sh];
@@ -340,10 +344,12 @@ void div_vec_vec(storage_t& lhs, const storage_t& rhs) {
         if (q != 0) {
             storage_t tmp(rhs);
             mul_vec_num(tmp, uicast(q));
+            while (!tmp.empty() && tmp.back() == 0) { tmp.pop_back(); }
 
             while (vec_less(lhs, tmp, i)) {
                 q--;
                 add_with_shift(lhs, rhs, i);
+                while (!lhs.empty() && lhs.back() == 0) { lhs.pop_back(); }
             }
             sub_with_shift(lhs, tmp, i);
             while (!lhs.empty() && lhs.back() == 0) { lhs.pop_back(); }
@@ -398,6 +404,7 @@ void div_vec_num(storage_t& lhs, const ui rhs) {
 big_integer &big_integer::operator/=(big_integer const &rhs) {
     if (size() < rhs.size()) {
         to_small();
+        isNegative = false;
         return *this;
     }
 
@@ -412,16 +419,28 @@ big_integer &big_integer::operator/=(big_integer const &rhs) {
         to_big();
         make_unique_storage();
         if (rhs.isSmall) {
+            ui tmp = rhs.smallnumber;
+            int sh = 0;
+            while (tmp < (1u << 31)) { tmp <<= 1; sh++; }
+            *this <<= sh;
             //div_vec_num(*number, rhs.smallnumber);
             //TODO
-            storage_t v(1, rhs.smallnumber);
+            storage_t v(1, tmp);
             div_vec_vec(*number, v);
         } else {
-            div_vec_vec(*number, *rhs.number);
+            ui tmp = rhs.number->back();
+            int sh = 0;
+            while (tmp < (1u << 31)) { tmp <<= 1; sh++; }
+
+            big_integer crhs(rhs);
+            crhs <<= sh;
+            *this <<= sh;
+            div_vec_vec(*number, *crhs.number);
         }
         remove_leading_zeros();
     }
     isNegative ^= rhs.isNegative;
+    if (size() == 0) { isNegative = false; }
     return *this;
 }
 
@@ -450,7 +469,7 @@ big_integer &big_integer::operator*=(uint32_t rhs) {
         }
     } else {
         make_unique_storage();
-        add_vec_num(*number, rhs, 0, 0);
+        mul_vec_num(*number, rhs);
         remove_leading_zeros();
     }
     return *this;
@@ -471,7 +490,7 @@ void make_bin_op(storage_t& lhs, const storage_t& rhs, ui lpadding, ui rpadding,
 
 big_integer &big_integer::operator&=(big_integer const &rhs) {
     storage_t res = to_complement();
-    make_bin_op(res, rhs.to_complement(), getPadding(isNegative), getPadding(rhs.isNegative), [](ui l, ui r) { return l & r;});
+    make_bin_op(res, rhs.to_complement(), getPadding(isNegative), getPadding(rhs.isNegative), std::bit_and<>());
     from_complement(res);
     return *this;
 }
@@ -479,7 +498,7 @@ big_integer &big_integer::operator&=(big_integer const &rhs) {
 
 big_integer &big_integer::operator|=(big_integer const &rhs) {
     storage_t res = to_complement();
-    make_bin_op(res, rhs.to_complement(), getPadding(isNegative), getPadding(rhs.isNegative), [](ui l, ui r) { return l | r;});
+    make_bin_op(res, rhs.to_complement(), getPadding(isNegative), getPadding(rhs.isNegative), std::bit_or<>());
     from_complement(res);
     return *this;
 }
@@ -487,7 +506,7 @@ big_integer &big_integer::operator|=(big_integer const &rhs) {
 
 big_integer &big_integer::operator^=(big_integer const &rhs) {
     storage_t res = to_complement();
-    make_bin_op(res, rhs.to_complement(), getPadding(isNegative), getPadding(rhs.isNegative), [](ui l, ui r) { return l ^ r;});
+    make_bin_op(res, rhs.to_complement(), getPadding(isNegative), getPadding(rhs.isNegative), std::bit_xor<>());
     from_complement(res);
     return *this;
 }
@@ -629,7 +648,7 @@ bool operator>=(big_integer const &a, big_integer const &b) {
 
 std::string to_string(big_integer const &a) {
     if (a.isSmall) {
-        return (a.isNegative ? "-" : "") + to_string(a.smallnumber);
+        return (a.isNegative ? "-" : "") + std::to_string(a.smallnumber);
     }
 
     std::vector<char> v;
@@ -637,7 +656,8 @@ std::string to_string(big_integer const &a) {
     while (tmp != 0) {
         big_integer lst = tmp % 10;
         assert(lst.isSmall);
-        v.push_back(static_cast<char>('0' + (*tmp.number)[0] % 10));
+        v.push_back(static_cast<char>('0' + lst.smallnumber % 10));
+        tmp /= 10;
     }
 
     std::string res;
@@ -705,6 +725,7 @@ void big_integer::remove_leading_zeros() {
     }
     if (number->empty()) {
         to_small(0);
+        isNegative = false;
     } else if (number->size() == 1) {
         to_small(number->back());
     }
@@ -751,6 +772,7 @@ void big_integer::make_unique_storage() {
     assert(!isSmall);
     if (isSmall) { return; }
     if (number.use_count() > 1) { number = std::make_shared<storage_t>(*number); }
+    //number = std::make_shared<storage_t>(*number);
 }
 
 uint64_t big_integer::toulong() const {
@@ -774,7 +796,7 @@ std::vector<uint32_t> big_integer::to_complement() const {
     if (isSmall) {
         ull tmp = toulong();
         if (isNegative) { tmp = ~tmp + 1; }
-        res = { uicast(tmp), uicast(tmp << BITS) };
+        res = { uicast(tmp), uicast(tmp >> BITS) };
     } else {
         res = *number;
 
