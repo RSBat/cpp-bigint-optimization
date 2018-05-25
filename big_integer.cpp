@@ -38,7 +38,7 @@ big_integer::big_integer(const big_integer &other) :isNegative(other.isNegative)
     }
 }
 
-big_integer::big_integer(int a) :isNegative(a < 0), isSmall(true), smallnumber(uicast(std::abs(a))) {
+big_integer::big_integer(int a) :isNegative(a < 0), isSmall(true), smallnumber(a < 0 ? ~uicast(a) + 1 : uicast(a)) {
 
 }
 
@@ -385,10 +385,12 @@ void div_vec_num(storage_t& lhs, const ui rhs) {
         if (q != 0) {
             storage_t tmp(rhs);
             mul_vec_num(tmp, uicast(q));
+            while (!tmp.empty() && tmp.back() == 0) { tmp.pop_back(); }
 
             while (vec_less(lhs, tmp, i)) {
                 q--;
                 add_with_shift(lhs, rhs, i);
+                while (!lhs.empty() && lhs.back() == 0) { lhs.pop_back(); }
             }
             sub_with_shift(lhs, tmp, i);
             while (!lhs.empty() && lhs.back() == 0) { lhs.pop_back(); }
@@ -423,10 +425,7 @@ big_integer &big_integer::operator/=(big_integer const &rhs) {
             int sh = 0;
             while (tmp < (1u << 31)) { tmp <<= 1; sh++; }
             *this <<= sh;
-            //div_vec_num(*number, rhs.smallnumber);
-            //TODO
-            storage_t v(1, tmp);
-            div_vec_vec(*number, v);
+            div_vec_vec(*number, {tmp});
         } else {
             ui tmp = rhs.number->back();
             int sh = 0;
