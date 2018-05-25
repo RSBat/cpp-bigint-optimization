@@ -563,7 +563,7 @@ big_integer &big_integer::operator>>=(int rhs) {
         }
     }
 
-    vec_shl(*number, uicast(rhs / BITS));
+    vec_shr(*number, uicast(rhs / BITS));
     remove_leading_zeros();
     if (isNegative && add1) { *this += 1; }
     return *this;
