@@ -7,6 +7,7 @@
 #include <limits>
 #include <cassert>
 #include <functional>
+#include <algorithm>
 
 typedef uint32_t ui;
 typedef uint64_t ull;
@@ -84,9 +85,9 @@ big_integer &big_integer::operator=(big_integer const &other) {
 
 // function will add space to store result
 // strong guarantee
-void add_vec_vec(storage_t& lhs, const storage_t& rhs, ui l_padding, ui r_padding) {
+void add_vec_vec(storage_t& lhs, const storage_t& rhs) {
     size_t m = std::max(lhs.size(), rhs.size()) + 1;
-    lhs.resize(m, l_padding);
+    lhs.resize(m, 0);
 
     ull carry = 0;
     for (size_t i = 0; i < rhs.size(); i++) {
@@ -96,19 +97,19 @@ void add_vec_vec(storage_t& lhs, const storage_t& rhs, ui l_padding, ui r_paddin
     }
 
     for (size_t i = rhs.size(); i < m; i++) {
-        ull tmp = carry + lhs[i] + r_padding;
+        ull tmp = carry + lhs[i];
         lhs[i] = uicast(tmp);
         carry = tmp >> BITS;
     }
 }
 
-void add_vec_num(storage_t& lhs, const ui rhs, ui l_padding, ui r_padding) {
+void add_vec_num(storage_t& lhs, const ui rhs) {
     size_t m = lhs.size() + 1;
-    lhs.resize(m, l_padding);
+    lhs.resize(m, 0);
 
     ull carry = rhs;
     for (size_t i = 0; i < m; i++) {
-        ull tmp = carry + lhs[i] + r_padding;
+        ull tmp = carry + lhs[i];
         lhs[i] = uicast(tmp);
         carry = tmp >> BITS;
     }
@@ -133,18 +134,18 @@ big_integer &big_integer::operator+=(big_integer const &rhs) {
         to_big();
         make_unique_storage();
         if (rhs.isSmall) {
-            add_vec_num(*number, rhs.smallnumber, 0, 0);
+            add_vec_num(*number, rhs.smallnumber);
         } else {
-            add_vec_vec(*number, *rhs.number, 0, 0);
+            add_vec_vec(*number, *rhs.number);
         }
         remove_leading_zeros();
     }
     return *this;
 }
 
-void sub_vec_vec(storage_t& lhs, const storage_t& rhs, ui l_padding, ui r_padding) {
+void sub_vec_vec(storage_t& lhs, const storage_t& rhs) {
     size_t m = std::max(lhs.size(), rhs.size()) + 1;
-    lhs.resize(m, l_padding);
+    lhs.resize(m, 0);
 
     ull carry = 1;
     for (size_t i = 0; i < rhs.size(); i++) {
@@ -154,20 +155,20 @@ void sub_vec_vec(storage_t& lhs, const storage_t& rhs, ui l_padding, ui r_paddin
     }
 
     for (size_t i = rhs.size(); i < m; i++) {
-        ull tmp = carry + lhs[i] + ~r_padding;
+        ull tmp = carry + lhs[i] + UI_MAX;
         lhs[i] = uicast(tmp);
         carry = tmp >> BITS;
     }
 }
 
-void sub_vec_num(storage_t& lhs, const ui rhs, ui l_padding, ui r_padding) {
+void sub_vec_num(storage_t& lhs, const ui rhs) {
     size_t m = lhs.size() + 1;
-    lhs.resize(m, l_padding);
+    lhs.resize(m, 0);
 
     ull carry = 1ull + ~rhs;
 
     for (size_t i = 0; i < m; i++) {
-        ull tmp = carry + lhs[i] + ~r_padding;
+        ull tmp = carry + lhs[i] + UI_MAX;
         lhs[i] = uicast(tmp);
         carry = tmp >> BITS;
     }
@@ -199,9 +200,9 @@ big_integer &big_integer::operator-=(big_integer const &rhs) {
         to_big();
         make_unique_storage();
         if (rhs.isSmall) {
-            sub_vec_num(*number, rhs.smallnumber, 0, 0);
+            sub_vec_num(*number, rhs.smallnumber);
         } else {
-            sub_vec_vec(*number, *rhs.number, 0, 0);
+            sub_vec_vec(*number, *rhs.number);
         }
         remove_leading_zeros();
     }
@@ -229,8 +230,8 @@ void mul_vec_vec(storage_t& lhs, const storage_t& rhs) {
 }
 
 // multiplies vector of any sign by a number
-void mul_vec_num(storage_t& lhs, const ui rhs, ui padding = 0) {
-    lhs.push_back(padding);
+void mul_vec_num(storage_t& lhs, const ui rhs) {
+    lhs.push_back(0);
 
     ull carry = 0;
     for (auto& x : lhs) {
@@ -286,7 +287,7 @@ void sub_with_shift(storage_t &lhs, const storage_t &rhs, long sh) {
     }
 }
 
-// lhs must be negative, rhs must be positive
+// lhs and rhs must be positive, lhs >= rhs
 void add_with_shift(storage_t &lhs, const storage_t& rhs, long sh) {
     ull carry = 0;
     size_t m = rhs.size() + sh;
@@ -294,9 +295,9 @@ void add_with_shift(storage_t &lhs, const storage_t& rhs, long sh) {
     lhs.push_back(0);
 
     for (size_t i = sh; i < m; i++) {
-        ull tmp = carry + lhs[i] + rhs[i - sh];
-        lhs[i] = uicast(tmp);
-        carry = tmp >> BITS;
+        carry += ullcast(lhs[i]) + rhs[i - sh];
+        lhs[i] = uicast(carry);
+        carry >>= BITS;
     }
 
     for (size_t i = m; i < n; i++) {
@@ -478,7 +479,7 @@ ui getPadding(bool sign) {
     return sign ? UI_MAX : 0;
 }
 
-void make_bin_op(storage_t& lhs, const storage_t& rhs, ui lpadding, ui rpadding, std::function<ui(ui, ui)> f) {
+void make_bin_op(storage_t& lhs, const storage_t& rhs, ui lpadding, ui rpadding, const std::function<ui(ui, ui)>& f) {
     size_t n = std::max(lhs.size(), rhs.size());
     lhs.resize(n, lpadding);
     
