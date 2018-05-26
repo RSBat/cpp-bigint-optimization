@@ -96,23 +96,22 @@ void add_vec_vec(storage_t& lhs, const storage_t& rhs) {
         carry = tmp >> BITS;
     }
 
-    for (size_t i = rhs.size(); i < m; i++) {
-        ull tmp = carry + lhs[i];
-        lhs[i] = uicast(tmp);
-        carry = tmp >> BITS;
-    }
+    std::for_each(lhs.begin() + rhs.size(), lhs.end(), [&carry](ui& x) {
+        carry += x;
+        x = uicast(carry);
+        carry >>= BITS;
+    });
 }
 
 void add_vec_num(storage_t& lhs, const ui rhs) {
-    size_t m = lhs.size() + 1;
-    lhs.resize(m, 0);
+    lhs.push_back(0);
 
     ull carry = rhs;
-    for (size_t i = 0; i < m; i++) {
-        ull tmp = carry + lhs[i];
-        lhs[i] = uicast(tmp);
-        carry = tmp >> BITS;
-    }
+    std::for_each(lhs.begin(), lhs.end(), [&carry](ui& x) {
+        carry += x;
+        x = uicast(carry);
+        carry >>= BITS;
+    });
 }
 
 big_integer &big_integer::operator+=(big_integer const &rhs) {
@@ -154,24 +153,23 @@ void sub_vec_vec(storage_t& lhs, const storage_t& rhs) {
         carry = tmp >> BITS;
     }
 
-    for (size_t i = rhs.size(); i < m; i++) {
-        ull tmp = carry + lhs[i] + UI_MAX;
-        lhs[i] = uicast(tmp);
-        carry = tmp >> BITS;
-    }
+    std::for_each(lhs.begin() + rhs.size(), lhs.end(), [&carry](ui& x) {
+        carry += ullcast(UI_MAX) + x;
+        x = uicast(carry);
+        carry >>= BITS;
+    });
 }
 
 void sub_vec_num(storage_t& lhs, const ui rhs) {
-    size_t m = lhs.size() + 1;
-    lhs.resize(m, 0);
+    lhs.push_back(0);
 
     ull carry = 1ull + ~rhs;
 
-    for (size_t i = 0; i < m; i++) {
-        ull tmp = carry + lhs[i] + UI_MAX;
-        lhs[i] = uicast(tmp);
-        carry = tmp >> BITS;
-    }
+    std::for_each(lhs.begin(), lhs.end(), [&carry](ui& x) {
+        carry += ullcast(UI_MAX) + x;
+        x = uicast(carry);
+        carry >>= BITS;
+    });
 }
 
 big_integer &big_integer::operator-=(big_integer const &rhs) {
@@ -269,7 +267,6 @@ big_integer &big_integer::operator*=(big_integer const &rhs) {
 void sub_with_shift(storage_t &lhs, const storage_t &rhs, long sh) {
     ull carry = 1;
     size_t m = rhs.size() + sh;
-    size_t n = lhs.size() + 1;
     lhs.push_back(0);
 
     for (size_t i = sh; i < m; i++) {
@@ -279,11 +276,11 @@ void sub_with_shift(storage_t &lhs, const storage_t &rhs, long sh) {
     }
 
     if (carry == 0) {
-        for (size_t i = m; i < n; i++) {
-            carry += lhs[i] + ullcast(UI_MAX);
-            lhs[i] = uicast(carry);
+        std::for_each(lhs.begin() + m, lhs.end(), [&carry](ui& x) {
+            carry += ullcast(UI_MAX) + x;
+            x = uicast(carry);
             carry >>= BITS;
-        }
+        });
     }
 }
 
@@ -291,7 +288,6 @@ void sub_with_shift(storage_t &lhs, const storage_t &rhs, long sh) {
 void add_with_shift(storage_t &lhs, const storage_t& rhs, long sh) {
     ull carry = 0;
     size_t m = rhs.size() + sh;
-    size_t n = lhs.size() + 1;
     lhs.push_back(0);
 
     for (size_t i = sh; i < m; i++) {
@@ -300,11 +296,11 @@ void add_with_shift(storage_t &lhs, const storage_t& rhs, long sh) {
         carry >>= BITS;
     }
 
-    for (size_t i = m; i < n; i++) {
-        ull tmp = carry + lhs[i];
-        lhs[i] = uicast(tmp);
-        carry = tmp >> BITS;
-    }
+    std::for_each(lhs.begin() + m, lhs.end(), [&carry](ui& x) {
+        carry += x;
+        x = uicast(carry);
+        carry >>= BITS;
+    });
 }
 
 // true if lhs < rhs * (BASE ^ sh)  as number (not lexicographically)
@@ -732,7 +728,6 @@ void big_integer::remove_leading_zeros() {
 }
 
 void big_integer::to_big() {
-//    assert(isSmall);
     if (!isSmall) { return; }
     ui tmp = smallnumber;
     new(&number) std::shared_ptr<storage_t>();
@@ -754,7 +749,6 @@ void big_integer::to_big(uint64_t x) {
 }
 
 void big_integer::to_small() {
-   // assert(!isSmall);
     if (isSmall) { return; }
     number.~shared_ptr();
     smallnumber = 0;
@@ -772,7 +766,6 @@ void big_integer::make_unique_storage() {
     assert(!isSmall);
     if (isSmall) { return; }
     if (number.use_count() > 1) { number = std::make_shared<storage_t>(*number); }
-    //number = std::make_shared<storage_t>(*number);
 }
 
 uint64_t big_integer::toulong() const {
