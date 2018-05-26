@@ -503,23 +503,23 @@ big_integer &big_integer::operator>>=(int rhs) {
     make_unique_storage();
 
     int sh = rhs % BITS;
-    bool add1 = false;
+    bool sub1 = false;
     if (sh != 0) {
         number->push_back(0);
         ui mask = UI_MAX >> (BITS - sh);
         ui carry = 0;
 
-        if ((*number)[0] & mask) { add1 = true; }
-        for (auto& x : *number) {
-            ui tmp = (x & mask) << (BITS - sh);
-            x = (x >> sh) | carry;
+        if ((*number)[0] & mask) { sub1 = true; }
+        for (auto it = number->rbegin(); it != number->rend(); ++it) {
+            ui tmp = (*it & mask) << (BITS - sh);
+            *it = (*it >> sh) | carry;
             carry = tmp;
         }
     }
 
     vec_shr(*number, uicast(rhs / BITS));
     remove_leading_zeros();
-    if (isNegative && add1) { *this += 1; }
+    if (isNegative && sub1) { *this -= 1; }
     return *this;
 }
 
