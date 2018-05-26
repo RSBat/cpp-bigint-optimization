@@ -316,7 +316,6 @@ bool vec_less(const storage_t& lhs, const storage_t& rhs, size_t sh = 0) {
 }
 
 //divides two positive vectors
-//TODO optimize
 void div_vec_vec(storage_t& lhs, const storage_t& rhs) {
     size_t m = lhs.size() - rhs.size();
     size_t n = rhs.size();
@@ -357,48 +356,6 @@ void div_vec_vec(storage_t& lhs, const storage_t& rhs) {
 
     lhs.swap(res);
 }
-/*
-void div_vec_num(storage_t& lhs, const ui rhs) {
-    size_t m = lhs.size() - 1;
-    size_t n = 1;
-    std::vector<ui> res(m + 1, 0);
-
-    if (!vec_less(lhs, rhs, m)) {
-        sub_with_shift(lhs, rhs, m);
-        while (!lhs.empty() && lhs.back() == 0) { lhs.pop_back(); }
-        res[m] = 1;
-    }
-
-    for (long i = m - 1; i >= 0; i--) {
-        ull q;
-
-        if (lhs.empty()) {
-            q = 0;
-        } else {
-            q = ((ullcast(lhs[n + i]) << BITS) + lhs[n + i - 1]) / rhs;
-            q = std::min(q, ullcast(UI_MAX));
-        }
-
-        if (q != 0) {
-            storage_t tmp(rhs);
-            mul_vec_num(tmp, uicast(q));
-            while (!tmp.empty() && tmp.back() == 0) { tmp.pop_back(); }
-
-            while (vec_less(lhs, tmp, i)) {
-                q--;
-                add_with_shift(lhs, rhs, i);
-                while (!lhs.empty() && lhs.back() == 0) { lhs.pop_back(); }
-            }
-            sub_with_shift(lhs, tmp, i);
-            while (!lhs.empty() && lhs.back() == 0) { lhs.pop_back(); }
-        }
-
-        res[i] = uicast(q);
-    }
-
-    lhs.swap(res);
-}
-*/
 
 big_integer &big_integer::operator/=(big_integer const &rhs) {
     if (size() < rhs.size()) {
