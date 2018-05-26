@@ -26,11 +26,11 @@ ull ullcast(const T& x) {
     return static_cast<ull>(x);
 }
 
-big_integer::big_integer() :isNegative(false), isSmall(true), smallnumber(0) {
+big_integer::big_integer() noexcept :isNegative(false), isSmall(true), smallnumber(0) {
 
 }
 
-big_integer::big_integer(const big_integer &other) :isNegative(other.isNegative), isSmall(other.isSmall) {
+big_integer::big_integer(const big_integer &other) noexcept :isNegative(other.isNegative), isSmall(other.isSmall) {
     if (isSmall) {
         smallnumber = other.smallnumber;
     } else {
@@ -38,7 +38,7 @@ big_integer::big_integer(const big_integer &other) :isNegative(other.isNegative)
     }
 }
 
-big_integer::big_integer(int a) :isNegative(a < 0), isSmall(true), smallnumber(a < 0 ? ~uicast(a) + 1 : uicast(a)) {
+big_integer::big_integer(int a) noexcept :isNegative(a < 0), isSmall(true), smallnumber(a < 0 ? ~uicast(a) + 1 : uicast(a)) {
 
 }
 
@@ -60,7 +60,7 @@ big_integer::~big_integer() {
     }
 }
 
-big_integer &big_integer::operator=(big_integer const &other) {
+big_integer &big_integer::operator=(big_integer const &other) noexcept {
     isNegative = other.isNegative;
 
     if (isSmall != other.isSmall) {
@@ -631,7 +631,7 @@ std::ostream &operator<<(std::ostream &s, big_integer const &a) {
     return s << to_string(a);
 }
 
-void big_integer::remove_leading_zeros() {
+void big_integer::remove_leading_zeros() noexcept {
     if (isSmall) { return; }
     while (!number->empty() && number->back() == 0) {
         number->pop_back();
@@ -665,14 +665,14 @@ void big_integer::to_big(uint64_t x) {
     isSmall = false;
 }
 
-void big_integer::to_small() {
+void big_integer::to_small() noexcept {
     if (isSmall) { return; }
     number.~shared_ptr();
     smallnumber = 0;
     isSmall = true;
 }
 
-void big_integer::to_small(uint32_t x) {
+void big_integer::to_small(uint32_t x) noexcept {
     assert(!isSmall);
     if (!isSmall) { number.~shared_ptr(); }
     smallnumber = x;
@@ -685,12 +685,12 @@ void big_integer::make_unique_storage() {
     if (number.use_count() > 1) { number = std::make_shared<storage_t>(*number); }
 }
 
-uint64_t big_integer::toulong() const {
+uint64_t big_integer::toulong() const noexcept {
     assert(isSmall);
     return ullcast(smallnumber);
 }
 
-size_t big_integer::size() const {
+size_t big_integer::size() const noexcept {
     if (isSmall) {
         return smallnumber == 0 ? 0 : 1;
     }

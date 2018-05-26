@@ -9,13 +9,13 @@
 
 struct big_integer
 {
-    big_integer();
-    big_integer(big_integer const& other);
-    big_integer(int a);
+    big_integer() noexcept ;
+    big_integer(big_integer const& other) noexcept;
+    big_integer(int a) noexcept ;
     explicit big_integer(std::string const& str);
     ~big_integer();
 
-    big_integer& operator=(big_integer const& other);
+    big_integer& operator=(big_integer const& other) noexcept;
 
     big_integer& operator+=(big_integer const& rhs);
     big_integer& operator-=(big_integer const& rhs);
@@ -61,14 +61,14 @@ private:
         uint32_t smallnumber;
     };
 
-    void remove_leading_zeros();
+    void remove_leading_zeros() noexcept;
     void to_big();
     void to_big(uint64_t);
-    void to_small();
-    void to_small(uint32_t);
+    void to_small() noexcept;
+    void to_small(uint32_t) noexcept;
     void make_unique_storage();
-    uint64_t toulong() const;
-    size_t size() const;
+    uint64_t toulong() const noexcept;
+    size_t size() const noexcept;
     std::vector<uint32_t> to_complement() const;
     void from_complement(const std::vector<uint32_t>&);
 };
