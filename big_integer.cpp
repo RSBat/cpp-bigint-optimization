@@ -34,8 +34,7 @@ big_integer::big_integer(const big_integer &other) :isNegative(other.isNegative)
     if (isSmall) {
         smallnumber = other.smallnumber;
     } else {
-        new(&number) std::shared_ptr<storage_t>();
-        number = other.number;
+        new(&number) std::shared_ptr<storage_t>(other.number);
     }
 }
 
@@ -85,18 +84,19 @@ big_integer &big_integer::operator=(big_integer const &other) {
 
 // function will add space to store result
 // strong guarantee
-void add_vec_vec(storage_t& lhs, const storage_t& rhs) {
-    size_t m = std::max(lhs.size(), rhs.size()) + 1;
+// lhs = lhs + (rhs * BASE ^ sh)
+void add_vec_vec(storage_t& lhs, const storage_t& rhs, size_t sh = 0) {
+    size_t m = std::max(lhs.size(), rhs.size() + sh) + 1;
     lhs.resize(m, 0);
 
     ull carry = 0;
-    for (size_t i = 0; i < rhs.size(); i++) {
-        ull tmp = carry + lhs[i] + rhs[i];
+    for (size_t i = sh; i < rhs.size() + sh; i++) {
+        ull tmp = carry + lhs[i] + rhs[i - sh];
         lhs[i] = uicast(tmp);
         carry = tmp >> BITS;
     }
 
-    std::for_each(lhs.begin() + rhs.size(), lhs.end(), [&carry](ui& x) {
+    std::for_each(lhs.begin() + rhs.size() + sh, lhs.end(), [&carry](ui& x) {
         carry += x;
         x = uicast(carry);
         carry >>= BITS;
@@ -142,18 +142,19 @@ big_integer &big_integer::operator+=(big_integer const &rhs) {
     return *this;
 }
 
-void sub_vec_vec(storage_t& lhs, const storage_t& rhs) {
-    size_t m = std::max(lhs.size(), rhs.size()) + 1;
+// lhs must be >= rhs
+void sub_vec_vec(storage_t& lhs, const storage_t& rhs, size_t sh = 0) {
+    size_t m = std::max(lhs.size(), rhs.size() + sh) + 1;
     lhs.resize(m, 0);
 
     ull carry = 1;
-    for (size_t i = 0; i < rhs.size(); i++) {
-        ull tmp = carry + lhs[i] + ~rhs[i];
+    for (size_t i = sh; i < rhs.size() + sh; i++) {
+        ull tmp = carry + lhs[i] + ~rhs[i - sh];
         lhs[i] = uicast(tmp);
         carry = tmp >> BITS;
     }
 
-    std::for_each(lhs.begin() + rhs.size(), lhs.end(), [&carry](ui& x) {
+    std::for_each(lhs.begin() + rhs.size() + sh, lhs.end(), [&carry](ui& x) {
         carry += ullcast(UI_MAX) + x;
         x = uicast(carry);
         carry >>= BITS;
@@ -262,47 +263,6 @@ big_integer &big_integer::operator*=(big_integer const &rhs) {
     return *this;
 }
 
-// lhs and rhs must be positive, lhs.size must be at least rhs.size + sh
-// lhs = lhs - (rhs * BASE ^ sh)
-void sub_with_shift(storage_t &lhs, const storage_t &rhs, long sh) {
-    ull carry = 1;
-    size_t m = rhs.size() + sh;
-    lhs.push_back(0);
-
-    for (size_t i = sh; i < m; i++) {
-        carry += ullcast(lhs[i]) + ~rhs[i - sh];
-        lhs[i] = uicast(carry);
-        carry >>= BITS;
-    }
-
-    if (carry == 0) {
-        std::for_each(lhs.begin() + m, lhs.end(), [&carry](ui& x) {
-            carry += ullcast(UI_MAX) + x;
-            x = uicast(carry);
-            carry >>= BITS;
-        });
-    }
-}
-
-// lhs and rhs must be positive, lhs >= rhs
-void add_with_shift(storage_t &lhs, const storage_t& rhs, long sh) {
-    ull carry = 0;
-    size_t m = rhs.size() + sh;
-    lhs.push_back(0);
-
-    for (size_t i = sh; i < m; i++) {
-        carry += ullcast(lhs[i]) + rhs[i - sh];
-        lhs[i] = uicast(carry);
-        carry >>= BITS;
-    }
-
-    std::for_each(lhs.begin() + m, lhs.end(), [&carry](ui& x) {
-        carry += x;
-        x = uicast(carry);
-        carry >>= BITS;
-    });
-}
-
 // true if lhs < rhs * (BASE ^ sh)  as number (not lexicographically)
 bool vec_less(const storage_t& lhs, const storage_t& rhs, size_t sh = 0) {
     if (lhs.size() != rhs.size() + sh) { return lhs.size() < rhs.size() + sh; }
@@ -322,7 +282,7 @@ void div_vec_vec(storage_t& lhs, const storage_t& rhs) {
     std::vector<ui> res(m + 1, 0);
 
     if (!vec_less(lhs, rhs, m)) {
-        sub_with_shift(lhs, rhs, m);
+        sub_vec_vec(lhs, rhs, m);
         while (!lhs.empty() && lhs.back() == 0) { lhs.pop_back(); }
         res[m] = 1;
     }
@@ -344,10 +304,10 @@ void div_vec_vec(storage_t& lhs, const storage_t& rhs) {
 
             while (vec_less(lhs, tmp, i)) {
                 q--;
-                add_with_shift(lhs, rhs, i);
+                add_vec_vec(lhs, rhs, i);
                 while (!lhs.empty() && lhs.back() == 0) { lhs.pop_back(); }
             }
-            sub_with_shift(lhs, tmp, i);
+            sub_vec_vec(lhs, tmp, i);
             while (!lhs.empty() && lhs.back() == 0) { lhs.pop_back(); }
         }
 
@@ -764,13 +724,13 @@ std::vector<uint32_t> big_integer::to_complement() const {
 }
 
 void big_integer::from_complement(const std::vector<uint32_t> & vec) {
-    if (vec.empty()) { to_small(0); }
-    isNegative = sign(vec.back());
+    if (vec.empty()) { to_small(0); isNegative = false; return; }
 
     to_big();
     number = std::make_shared<storage_t>(vec);
-    if (isNegative) {
-        number->push_back(getPadding(isNegative));
+    bool sgn = sign(vec.back());
+    if (sgn) {
+        number->push_back(getPadding(sgn));
 
         ull carry = 1;
         for (auto &x : *number) {
@@ -780,6 +740,7 @@ void big_integer::from_complement(const std::vector<uint32_t> & vec) {
         }
     }
 
+    isNegative = sgn;
     remove_leading_zeros();
 }
 
