@@ -404,7 +404,7 @@ big_integer &big_integer::operator%=(big_integer const &rhs) {
 }
 
 big_integer &big_integer::operator*=(int32_t rhs) {
-    *this *= uicast(std::abs(rhs));
+    *this *= rhs < 0 ? ~uicast(rhs) + 1 : uicast(rhs);
 
     if (rhs < 0) {
         isNegative = !isNegative;
